@@ -162,6 +162,8 @@ class QuestAttention(nn.Module):
                     
                     # 3. Inject the Last Page three times at the end
                     indices[:, k-2:k] = last_page
+                    if self.layer_idx == 0:
+                        print(f"\n[DEBUG] Layer 0 | Head 0 Selected Pages: {indices[0].tolist()}")
 
                 torch.cuda.nvtx.range_pop()
 
