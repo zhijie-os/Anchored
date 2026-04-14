@@ -132,19 +132,37 @@ class QuestAttention(nn.Module):
                 )
                 torch.cuda.nvtx.range_pop()
             else:
-                torch.cuda.nvtx.range_push("estimate")
+                # compute critical scores for each pages
+                torch.cuda.nvtx.range_push("estimate") # nvtx.range is profiling markers
                 estimated_attn_score = quest.utils.decode_estimate(
                     query_states,
                     iController,
                     self.layer_idx,
                 )
-                torch.cuda.nvtx.range_pop()
 
+                # exclude the
+                estimated_attn_score[..., 0] = float("-inf")
+                torch.cuda.nvtx.range_pop() # end profiling marker
+
+                # select topk pages based on the critical scores
                 torch.cuda.nvtx.range_push("topk")
                 quest.utils.decode_topk(
                     estimated_attn_score,
                     iController,
                 )
+
+                k = iController.inference_page_budget - 1
+                last_page = iController.metadata_last_page_idx
+                indices = iController.topk_dindices_buffer
+                if k >= 4:
+                    indices[:, 2:k-2] = indices[:, 0:k-4].clone()
+                    
+                    # 2. Inject Page 1 (index 0) twice at the beginning
+                    indices[:, 0:2] = 0
+                    
+                    # 3. Inject the Last Page three times at the end
+                    indices[:, k-2:k] = last_page
+
                 torch.cuda.nvtx.range_pop()
 
                 torch.cuda.nvtx.range_push("approx_attn")
