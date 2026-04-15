@@ -195,8 +195,8 @@ def main(args):
 
         result = [0] * len(lengths)
         for i, length in tenumerate(lengths, desc="Lengths", leave=False):
+            print(f"Testing with length {length} ({tokens[i]} tokens)")
             for _ in trange(0, args.iterations, desc="Iterations", leave=False):
-
                 depth_ratio = 100 // args.iterations * (_ + 1)
                 prompt_text, pass_key, answer_first, answer_last = generate_prompt(
                     length, depth_ratio

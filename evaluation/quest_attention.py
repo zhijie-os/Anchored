@@ -55,6 +55,29 @@ def local_heavy_hitter_mask(attn_weights, token_budget, chunk_size):
     _, topk = chunk_attn_weights.topk(
         k=min(max(3, token_budget // chunk_size), chunk_attn_weights.size(-1)), dim=-1
     )
+    k = topk.shape[-1]
+    last_page = chunk_attn_weights.shape[-1] - 1
+
+    if k == 2:
+        # 2 Pages Total: 1 for Front, 1 for Back
+        topk[..., 0:1] = 0
+        topk[..., 1:2] = last_page
+        
+    elif k == 3:
+        # 3 Pages Total: 1 for Front, 2 for Back
+        topk[..., 0:1] = 0
+        topk[..., 1:3] = last_page
+        
+    elif k >= 4:
+        # 4+ Pages: Shift dynamic pages, 2 for Front, 2 for Back
+        topk[..., 2:k-2] = topk[..., 0:k-4].clone()
+        topk[..., 0:2] = 0
+        topk[..., k-2:k] = last_page
+        
+    # IMMEDIATE TERMINAL FLUSH TO GUARANTEE PRINTOUT
+    # print(f"\n[DEBUG] Budget K={k} | Head 0 Selected: {topk[0, 0, 0].tolist()}", flush=True)
+    # -------------------------------
+
     # repeat topk chunk_size times and recover the original indexes (* chunk_size + arange(chunk_size))
     topk = topk.unsqueeze(-1).repeat(
         1, 1, 1, 1, chunk_size

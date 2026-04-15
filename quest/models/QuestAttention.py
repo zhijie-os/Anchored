@@ -68,6 +68,8 @@ class QuestAttention(nn.Module):
         assert bsz == 1, "QuestAttention only supports batch size 1."
         assert hasattr(self, 'layer_idx'), "QuestAttention requires layer_idx to inference."
 
+        print("[DEBUG] Layer {} | q_len: {}".format(self.layer_idx, q_len))
+
         if self.pretraining_tp > 1:
             key_value_slicing = (self.num_key_value_heads * self.head_dim) // self.pretraining_tp
             query_slices = self.q_proj.weight.split((self.num_heads * self.head_dim) // self.pretraining_tp, dim=0)
