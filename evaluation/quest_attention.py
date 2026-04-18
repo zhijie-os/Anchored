@@ -20,7 +20,7 @@ from transformers.cache_utils import DynamicCache
 
 from transformers.models.mistral.modeling_mistral import MistralAttention
 
-def local_heavy_hitter_mask(attn_weights, token_budget, chunk_size):
+def local_heavy_hitter_mask(attn_weights, token_budget, chunk_size, p_len):
     # attn_weights (BS, head, query, keys)
 
     # expend attn_weights to be divisible by chunk_size
@@ -57,7 +57,8 @@ def local_heavy_hitter_mask(attn_weights, token_budget, chunk_size):
 
     # 2. Prevent Page 0 and Last Page from being selected by topk
     chunk_attn_weights[..., 0] = float('-inf')
-    chunk_attn_weights[..., last_page] = float('-inf')
+    locked_page_idx = max(0, (p_len - 1) // chunk_size)
+    chunk_attn_weights[..., locked_page_idx] = float('-inf')
 
     # 3. Calculate the remaining dynamic budget (k - 5)
     # Using max(0, ...) ensures it never requests a negative budget
@@ -232,16 +233,20 @@ def forward(
 
     attn_weights_for_selection = quantized_weight
 
+
+    p_len = getattr(self, "prompt_length", kv_seq_len)
+    start_idx = max(0, p_len - self.chunk_size)
     if token_budget > 0:
         mask_bottom = local_heavy_hitter_mask(
-            attn_weights_for_selection, token_budget, self.chunk_size
+            attn_weights_for_selection, token_budget, self.chunk_size, p_len
         )  # Default: No padding applied to input
     else:
         mask_bottom = torch.zeros_like(attn_weights_for_selection, dtype=torch.bool)
 
     # keep the first page and last page data alive
     mask_bottom[..., :self.chunk_size] = True
-    mask_bottom[..., -self.chunk_size:] = True
+    mask_bottom[..., start_idx : p_len] = True
+
 
     mask_bottom = torch.tril(mask_bottom, diagonal=position_ids[0][0].item())
     attn_weights[~mask_bottom] = torch.tensor(torch.finfo(attn_weights.dtype).min)
@@ -251,11 +256,11 @@ def forward(
     if k >= 3:
         # 2. Extract the raw tensor data for the 16 tokens of Page 0 and Last Page
         page_0_attn = attn_weights[..., :self.chunk_size]
-        last_page_attn = attn_weights[..., -self.chunk_size:]
+        last_page_attn = attn_weights[..., start_idx : p_len]
         
         # Note: value_states has the sequence length on dim=-2
         page_0_v = value_states[..., :self.chunk_size, :]
-        last_page_v = value_states[..., -self.chunk_size:, :]
+        last_page_v = value_states[..., start_idx : p_len, :]
 
         extra_attn = []
         extra_v = []

@@ -151,6 +151,11 @@ def get_pred(
 
         context_length = input.input_ids.shape[-1] + q_input.input_ids.shape[-1]
 
+        # adding the prompt length information to the model
+        for module in model.modules():
+            if hasattr(module, 'token_budget'):
+                module.prompt_length = context_length
+
         if (
             dataset == "samsum"
         ):  # prevent illegal output on samsum (model endlessly repeat "\nDialogue"), might be a prompting issue
