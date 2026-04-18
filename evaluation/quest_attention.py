@@ -282,7 +282,7 @@ def forward(
             attn_weights = torch.cat([attn_weights] + extra_attn, dim=-1)
             # value_states sequence is on dim=-2
             value_states = torch.cat([value_states] + extra_v, dim=-2)
-            if getattr(self, "layer_id", -1) == 0:
+            if getattr(self, "layer_id", -1) == 0: # turn this into 2 for printout
                 print(f"\n[DEBUG] Budget K={k} | Added {len(extra_attn)} extra pages. KV Length Grew: {orig_len} -> {attn_weights.shape[-1]}", flush=True)
     # =========================================================================
     # upcast attention to fp32
