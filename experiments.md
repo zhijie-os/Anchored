@@ -21,5 +21,16 @@
 
 | Method / Budget | 32 | 64 | 128 |
 | :--- | :--- | :--- | :--- |
-| **Quest** | 65% | 99% | 99% |
-| **Ours** | 0% | 0% | 100% |
+| **Quest (from the paper)** | 65% | 99% | 99% |
+| **Ours (iteration 20 times)** | 0% | 0% | 100% |
+
+# LongBench
+
+LongChat-7B-v1.5-32K
+- qasper: single-document QA
+- narrativeqa: single-document QA
+- hotpotqa: multi-document QA
+- multifieldqa_en: multi-document QA
+- gov_report: text summarization
+- triviaqa: few-show learning
+- PassageRetrieval:(from ArkVale) not doing 
