@@ -17,12 +17,23 @@
 - Llama-2-7B-80K-Yarn
 
 
-# LongChat-7B-v1.5-32K passkey retrieval
+# Passkey retrieval
+
+## LongChat-7B-v1.5-32K 
 
 | Method / Budget | 32 | 64 | 128 |
 | :--- | :--- | :--- | :--- |
 | **Quest (from the paper)** | 65% | 99% | 99% |
 | **Ours (iteration 20 times)** | 0% | 0% | 100% |
+
+##  Yarn-Llama-2-7b-128k 
+
+sequence length 100k, OOM
+
+| Method / Budget | 256 | 512 | 1024 |
+| :--- | :--- | :--- | :--- |
+| **Quest (from the paper)** | 88% | 92% | 96% |
+| **Ours (iteration 50 times)** | 0% | 0% | 0% |
 
 # LongBench
 
