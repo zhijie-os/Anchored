@@ -43,6 +43,15 @@ def local_heavy_hitter_mask(attn_weights, token_budget, chunk_size):
         dim=-1,
     )
 
+    # chunk attn_weights into chunk_size tokens
+    chunk_attn_weights = attn_weights.reshape(
+        attn_weights.shape[0],
+        attn_weights.shape[1],
+        attn_weights.shape[2],
+        attn_weights.shape[3] // chunk_size,
+        chunk_size,
+    ).amax(dim=-1)
+
     total_k = min(max(3, token_budget // chunk_size), chunk_attn_weights.size(-1))
     last_page = chunk_attn_weights.shape[-1] - 1
 
