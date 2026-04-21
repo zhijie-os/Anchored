@@ -234,7 +234,8 @@ def forward(
     attn_weights_for_selection = quantized_weight
 
 
-    p_len = getattr(self, "prompt_length", kv_seq_len)
+    # Force p_len to never exceed the actual physical sequence length in the GPU
+    p_len = min(getattr(self, "prompt_length", kv_seq_len), kv_seq_len)
     start_idx = max(0, p_len - self.chunk_size)
     if token_budget > 0:
         mask_bottom = local_heavy_hitter_mask(
