@@ -59,9 +59,9 @@ def local_heavy_hitter_mask(attn_weights, token_budget, chunk_size):
     chunk_attn_weights[..., 0] = float('-inf')
     chunk_attn_weights[..., last_page] = float('-inf')
 
-    # 3. Calculate the remaining dynamic budget (k - 5)
+    # 3. Calculate the remaining dynamic budget (k - 2)
     # Using max(0, ...) ensures it never requests a negative budget
-    dynamic_k = max(0, total_k - 5)
+    dynamic_k = max(0, total_k - 2)
 
     # 4. Search for the best remaining pages
     if dynamic_k > 0:
@@ -229,10 +229,11 @@ def forward(
         )
 
     token_budget = min(kv_seq_len, self.token_budget)
-
     attn_weights_for_selection = quantized_weight
 
-    if token_budget > 0:
+    if kv_seq_len <= self.token_budget:
+        mask_bottom = torch.ones_like(attn_weights_for_selection, dtype=torch.bool)
+    elif token_budget > 0:
         mask_bottom = local_heavy_hitter_mask(
             attn_weights_for_selection, token_budget, self.chunk_size
         )  # Default: No padding applied to input
@@ -246,45 +247,6 @@ def forward(
     mask_bottom = torch.tril(mask_bottom, diagonal=position_ids[0][0].item())
     attn_weights[~mask_bottom] = torch.tensor(torch.finfo(attn_weights.dtype).min)
 
-    #
-    k = self.token_budget // self.chunk_size
-    if k >= 3:
-        # 2. Extract the raw tensor data for the 16 tokens of Page 0 and Last Page
-        page_0_attn = attn_weights[..., :self.chunk_size]
-        last_page_attn = attn_weights[..., -self.chunk_size:]
-        
-        # Note: value_states has the sequence length on dim=-2
-        page_0_v = value_states[..., :self.chunk_size, :]
-        last_page_v = value_states[..., -self.chunk_size:, :]
-
-        extra_attn = []
-        extra_v = []
-
-        # 3. Append physical clones based on your exact math
-        # (The base sequence already contains 1 copy of Front and 1 copy of Back)
-        if k == 3:
-            # Goal: 1 Front, 2 Back -> Add 1 copy of Back
-            extra_attn.extend([last_page_attn])
-            extra_v.extend([last_page_v])
-        elif k == 4:
-            # Goal: 2 Front, 2 Back -> Add 1 copy of Front, 1 copy of Back
-            extra_attn.extend([page_0_attn, last_page_attn])
-            extra_v.extend([page_0_v, last_page_v])
-        elif k >= 5:
-            # Goal: 2 Front, 3 Back -> Add 1 copy of Front, 2 copies of Back
-            extra_attn.extend([page_0_attn, last_page_attn, last_page_attn])
-            extra_v.extend([page_0_v, last_page_v, last_page_v])
-
-        # 4. Concatenate them to the sequence dimensions
-        if extra_attn:
-            orig_len = attn_weights.shape[-1] # Capture the original length
-            # attn_weights sequence is on dim=-1
-            attn_weights = torch.cat([attn_weights] + extra_attn, dim=-1)
-            # value_states sequence is on dim=-2
-            value_states = torch.cat([value_states] + extra_v, dim=-2)
-            if getattr(self, "layer_id", -1) == 0: # turn this into 2 for printout
-                print(f"\n[DEBUG] Budget K={k} | Added {len(extra_attn)} extra pages. KV Length Grew: {orig_len} -> {attn_weights.shape[-1]}", flush=True)
-    # =========================================================================
     # upcast attention to fp32
     attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(
         query_states.dtype
