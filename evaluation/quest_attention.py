@@ -61,7 +61,7 @@ def local_heavy_hitter_mask(attn_weights, token_budget, chunk_size):
 
     # 3. Calculate the remaining dynamic budget (k - 2)
     # Using max(0, ...) ensures it never requests a negative budget
-    dynamic_k = max(0, total_k - 2)
+    dynamic_k = max(0, total_k - 3)
 
     # 4. Search for the best remaining pages
     if dynamic_k > 0:
@@ -255,8 +255,8 @@ def forward(
 
     extra_attn = []
     extra_v = []
-    extra_attn.extend([page_0_attn, last_page_attn])
-    extra_v.extend([page_0_v, last_page_v])
+    extra_attn.extend([page_0_attn, last_page_attn, last_page_attn])
+    extra_v.extend([page_0_v, last_page_v, last_page_v])
 
     attn_weights = torch.cat([attn_weights] + extra_attn, dim=-1)
     # value_states sequence is on dim=-2
