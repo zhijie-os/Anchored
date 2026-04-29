@@ -65,6 +65,48 @@ def test_model(pipe, prompt_text, pass_key):
     q_input = pipe.tokenizer(que, return_tensors="pt").to("cuda")
     q_input.input_ids = q_input.input_ids[:, 1:]
 
+
+    # === INJECT THE PROMPT LENGTH BROADCAST HERE ===
+    context_length = input.input_ids.shape[-1] + q_input.input_ids.shape[-1]
+    
+    # Note: Because we used pipeline(), we iterate over pipe.model
+    for module in pipe.model.modules():
+        if hasattr(module, 'token_budget'):
+            module.prompt_length = context_length
+
+# === INJECT THE TEXT DEBUG PRINT HERE ===
+    chunk_size = 16
+    start_idx = max(0, context_length - chunk_size)
+    
+    # Recombine the tensors to match exactly what the model sees
+    full_input_ids = torch.cat([input.input_ids, q_input.input_ids], dim=-1)
+
+    # --- NEW OFFSET CALCULATION ---
+    # Find exactly where the passkey sentence starts in the raw text
+    passkey_str = f"The pass key is {pass_key}"
+    char_offset = prompt_text.find(passkey_str)
+    prefix_before_passkey = prompt_text[:char_offset]
+    
+    # Tokenize just the prefix to find the exact token index of the passkey
+    # (Subtract 1 to account for the automatically added <s> BOS token)
+    passkey_token_idx = len(pipe.tokenizer.encode(prefix_before_passkey)) - 1
+    passkey_chunk_idx = passkey_token_idx // chunk_size
+    # ------------------------------
+
+    print(f"\n[DEBUG] Passkey Evaluation - Total Tokens: {context_length}")
+    
+    print(f"--- PASSKEY LOCATION ---")
+    print(f"Target Token Index: {passkey_token_idx}")
+    print(f"Target Chunk Index: {passkey_chunk_idx} (Your dynamic_k MUST select this chunk!)")
+    
+    print("\n--- PAGE 0 (First 16 Tokens) ---")
+    print(repr(pipe.tokenizer.decode(full_input_ids[0, :chunk_size])))
+    
+    print("\n--- LOCKED LAST PAGE (Targeted Question) ---")
+    print(repr(pipe.tokenizer.decode(full_input_ids[0, start_idx : context_length])))
+    print("================================================\n", flush=True)
+    # ===============================================
+
     with torch.no_grad():
         output = pipe.model(
             input_ids=input.input_ids,

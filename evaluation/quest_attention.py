@@ -288,8 +288,27 @@ def forward(
             attn_weights = torch.cat([attn_weights] + extra_attn, dim=-1)
             # value_states sequence is on dim=-2
             value_states = torch.cat([value_states] + extra_v, dim=-2)
-            if getattr(self, "layer_id", -1) == 0: # turn this into 2 for printout
-                print(f"\n[DEBUG] Budget K={k} | Added {len(extra_attn)} extra pages. KV Length Grew: {orig_len} -> {attn_weights.shape[-1]}", flush=True)
+            # === THE MATHEMATICAL PROOF BLOCK ===
+            if getattr(self, "layer_id", 2) == 0:
+                print(f"\n[DEBUG Layer 0] Tensor Extraction Telemetry:", flush=True)
+                print(f"  1. Slicing Indices: start_idx={start_idx} to p_len={p_len}", flush=True)
+                
+                # Verify the shapes are exactly 16 tokens long
+                print(f"  2. Page 0 Shape: {page_0_v.shape} (Expected seq_len=16)", flush=True)
+                print(f"  3. Last Page Shape: {last_page_v.shape} (Expected seq_len=16)", flush=True)
+                
+                # Verify the clone with a mathematical Checksum
+                # We calculate the sum of all floating point numbers in the original Question slice
+                original_question_sum = last_page_v.sum().item()
+                
+                # Then we calculate the sum of the newly appended chunk at the absolute end of the KV cache
+                new_appended_sum = value_states[..., -self.chunk_size:, :].sum().item()
+                
+                is_perfect_clone = (original_question_sum == new_appended_sum)
+                
+                print(f"  4. Perfect Clone Verified?: {is_perfect_clone} (Checksum: {original_question_sum:.4f})", flush=True)
+                print(f"  5. KV Cache Grew: {orig_len} -> {attn_weights.shape[-1]}\n", flush=True)
+            # ====================================
     # =========================================================================
     # upcast attention to fp32
     attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(

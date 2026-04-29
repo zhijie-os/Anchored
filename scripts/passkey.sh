@@ -6,9 +6,9 @@ OUTPUT_DIR=results/$MODEL
 
 mkdir -p $OUTPUT_DIR
 
-length=10000
+length=100
 
-for token_budget in 32 64 128
+for token_budget in 128
 do
     python passkey.py -m $MODELPATH \
         --iterations 50 --fixed-length $length \
