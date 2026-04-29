@@ -241,11 +241,26 @@ def forward(
         mask_bottom = torch.zeros_like(attn_weights_for_selection, dtype=torch.bool)
 
     # keep the first page and last page data alive
-    mask_bottom[..., :self.chunk_size] = True
-    mask_bottom[..., -self.chunk_size:] = True
+    page_0_attn = attn_weights[..., :self.chunk_size].clone()
+    last_page_attn = attn_weights[..., -self.chunk_size:].clone()
+    
+    page_0_v = value_states[..., :self.chunk_size, :].clone()
+    last_page_v = value_states[..., -self.chunk_size:, :].clone()
+    
+    mask_bottom[..., :self.chunk_size] = False
+    mask_bottom[..., -self.chunk_size:] = False
 
     mask_bottom = torch.tril(mask_bottom, diagonal=position_ids[0][0].item())
     attn_weights[~mask_bottom] = torch.tensor(torch.finfo(attn_weights.dtype).min)
+
+    extra_attn = []
+    extra_v = []
+    extra_attn.extend([page_0_attn, last_page_attn])
+    extra_v.extend([page_0_v, last_page_v])
+
+    attn_weights = torch.cat([attn_weights] + extra_attn, dim=-1)
+    # value_states sequence is on dim=-2
+    value_states = torch.cat([value_states] + extra_v, dim=-2)
 
     # upcast attention to fp32
     attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(
