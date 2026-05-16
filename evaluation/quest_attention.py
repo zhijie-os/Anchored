@@ -90,6 +90,11 @@ def local_heavy_hitter_mask(attn_weights, token_budget, chunk_size, p_len):
         # Turn the selected switches to True
         mask_bottom.scatter_(-1, topk, True)
 
+    # Anchor first and last chunks in chunk space (padded) to avoid
+    # token-space misalignment when kv_seq_len isn't chunk-aligned.
+    mask_bottom[..., :chunk_size] = True
+    mask_bottom[..., locked_page_idx * chunk_size : (locked_page_idx + 1) * chunk_size] = True
+
     # remove the padding
     mask_bottom = mask_bottom[:, :, :, :seq_length]
 
@@ -233,11 +238,8 @@ def forward(
     token_budget = min(kv_seq_len, self.token_budget)
     attn_weights_for_selection = quantized_weight
 
-
     # Force p_len to never exceed the actual physical sequence length in the GPU
     p_len = min(getattr(self, "prompt_length", kv_seq_len), kv_seq_len)
-    start_idx = max(0, p_len - self.chunk_size)
-
 
     if kv_seq_len  <= self.token_budget:
         mask_bottom = torch.ones_like(attn_weights_for_selection, dtype=torch.bool)
@@ -247,11 +249,6 @@ def forward(
         )  # Default: No padding applied to input
     else:
         mask_bottom = torch.zeros_like(attn_weights_for_selection, dtype=torch.bool)
-
-    # keep the first page and last page data alive
-    mask_bottom[..., :self.chunk_size] = True
-    mask_bottom[..., start_idx : p_len] = True
-
 
     mask_bottom = torch.tril(mask_bottom, diagonal=position_ids[0][0].item())
     attn_weights[~mask_bottom] = torch.tensor(torch.finfo(attn_weights.dtype).min)
