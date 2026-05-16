@@ -88,6 +88,11 @@ def local_heavy_hitter_mask(attn_weights, token_budget, chunk_size):
         # Turn the selected switches to True
         mask_bottom.scatter_(-1, topk, True)
 
+    # Anchor first and last chunks in chunk space (padded) to avoid
+    # token-space misalignment when kv_seq_len isn't chunk-aligned.
+    mask_bottom[..., :chunk_size] = True
+    mask_bottom[..., last_page * chunk_size : (last_page + 1) * chunk_size] = True
+
     # remove the padding
     mask_bottom = mask_bottom[:, :, :, :seq_length]
 
@@ -239,10 +244,6 @@ def forward(
         )  # Default: No padding applied to input
     else:
         mask_bottom = torch.zeros_like(attn_weights_for_selection, dtype=torch.bool)
-
-    # keep the first page and last page data alive
-    mask_bottom[..., :self.chunk_size] = True
-    mask_bottom[..., -self.chunk_size:] = True
 
     mask_bottom = torch.tril(mask_bottom, diagonal=position_ids[0][0].item())
     attn_weights[~mask_bottom] = torch.tensor(torch.finfo(attn_weights.dtype).min)
